@@ -38,6 +38,30 @@ from nerfstudio.field_components.mlp import MLP, MLPWithHashEncoding
 from nerfstudio.field_components.spatial_distortions import SpatialDistortion
 from nerfstudio.fields.base_field import Field, get_normalized_directions
 
+class LowPassFilter(nn.Module):
+    def __init__(self, kernel_size=3):
+        super(LowPassFilter, self).__init__()
+        self.kernel = nn.Conv2d(in_channels=3, out_channels=3, kernel_size=kernel_size, padding=kernel_size//2, bias=False)
+        nn.init.constant_(self.kernel.weight, 1.0 / (kernel_size * kernel_size))
+        self.kernel.weight.requires_grad = False
+
+    def forward(self, x):
+        return self.kernel(x)
+    
+class GaussianFilter(nn.Module):
+    def __init__(self, kernel_size=3, sigma=1.0):
+        super(GaussianFilter, self).__init__()
+        self.kernel_size = kernel_size
+        self.sigma = sigma
+        self.padding = kernel_size // 2
+
+        x = torch.arange(-self.padding, self.padding + 1, dtype=torch.float32)
+        gauss = torch.exp(-x**2 / (2 * sigma**2))
+        gauss = gauss / gauss.sum()
+        self.kernel = gauss.view(1, 1, -1) * gauss.view(1, -1, 1)
+
+    def forward(self, x):
+        return nn.functional.conv2d(x, self.kernel, padding=self.padding)
 
 class NerfactoField(Field):
     """Compound Field
@@ -101,6 +125,8 @@ class NerfactoField(Field):
 
         self.register_buffer("aabb", aabb)
         self.geo_feat_dim = geo_feat_dim
+        self.low_pass_filter = LowPassFilter(kernel_size=2) # 添加一个滤波器, size可以调整
+        self.gaussian_filter = GaussianFilter() #高斯滤波
 
         self.register_buffer("max_res", torch.tensor(max_res))
         self.register_buffer("num_levels", torch.tensor(num_levels))
@@ -137,8 +163,8 @@ class NerfactoField(Field):
             max_res=max_res,
             log2_hashmap_size=log2_hashmap_size,
             features_per_level=features_per_level,
-            num_layers=num_layers,
-            layer_width=hidden_dim,
+            num_layers=num_layers + 1, # 加一点层数
+            layer_width=hidden_dim * 2, # 和维度
             out_dim=1 + self.geo_feat_dim,
             activation=nn.ReLU(),
             out_activation=None,
@@ -209,6 +235,10 @@ class NerfactoField(Field):
         else:
             positions = SceneBox.get_normalized_positions(ray_samples.frustums.get_positions(), self.aabb)
         # Make sure the tcnn gets inputs between 0 and 1.
+
+        positions = self.low_pass_filter(positions) # 应用滤波器
+        # positions = self.gaussian_filter(positions)
+
         selector = ((positions > 0.0) & (positions < 1.0)).all(dim=-1)
         positions = positions * selector[..., None]
 
