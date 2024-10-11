@@ -57,7 +57,7 @@ class NerfactoModelConfig(ModelConfig):
     """How far along the ray to start sampling."""
     far_plane: float = 1000.0
     """How far along the ray to stop sampling."""
-    background_color: Literal["random", "last_sample", "black", "white"] = "last_sample"
+    background_color: Literal["random", "last_sample", "black", "white"] = "white"
     """Whether to randomize the background color."""
     hidden_dim: int = 64
     """Dimension of hidden layers"""
@@ -415,10 +415,10 @@ class NerfactoModel(Model):
         lpips = self.lpips(gt_rgb, predicted_rgb)
 
         # 打印 PSNR, SSIM 和 LPIPS 的值
-        print(f"PSNR: {psnr.item()}")
-        print(f"SSIM: {ssim.item()}")
-        print(f"LPIPS: {lpips.item()}")
-        
+        print(f"PSNR: {psnr.item()}", flush=True)
+        print(f"SSIM: {ssim.item()}", flush=True)
+        print(f"LPIPS: {lpips.item()}", flush=True)
+
         # all of these metrics will be logged as scalars
         metrics_dict = {"psnr": float(psnr.item()), "ssim": float(ssim)}  # type: ignore
         metrics_dict["lpips"] = float(lpips)
