@@ -163,9 +163,19 @@ class NerfactoField(Field):
             max_res=max_res,
             log2_hashmap_size=log2_hashmap_size,
             features_per_level=features_per_level,
-            num_layers=num_layers + 1, # 加一点层数
-            layer_width=hidden_dim * 2, # 和维度
+            num_layers=num_layers, # 加一点层数
+            layer_width=hidden_dim, # 和维度
             out_dim=1 + self.geo_feat_dim,
+            activation=nn.ReLU(),
+            out_activation=None,
+            implementation=implementation,
+        )
+
+        self.mlp_skip = MLP(
+            in_dim=self.geo_feat_dim + hidden_dim,  # Adjust input size after concatenation
+            num_layers=2,
+            layer_width=hidden_dim,
+            out_dim=hidden_dim,  # Ensure output size matches
             activation=nn.ReLU(),
             out_activation=None,
             implementation=implementation,
@@ -251,7 +261,12 @@ class NerfactoField(Field):
 
         assert positions_flat.numel() > 0, "positions_flat is empty."
         h = self.mlp_base(positions_flat).view(*ray_samples.frustums.shape, -1)
-        density_before_activation, base_mlp_out = torch.split(h, [1, self.geo_feat_dim], dim=-1)
+
+        # 加一个 Skip Connection
+        combined_input = torch.cat([positions_flat, h.view(-1, self.geo_feat_dim)], dim=-1)
+        output_with_skip = self.mlp_skip(combined_input)
+
+        density_before_activation, base_mlp_out = torch.split(output_with_skip, [1, self.geo_feat_dim], dim=-1)
         self._density_before_activation = density_before_activation
 
         # Rectifying the density with an exponential is much more stable than a ReLU or
