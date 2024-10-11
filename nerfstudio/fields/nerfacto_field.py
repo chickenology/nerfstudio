@@ -178,8 +178,8 @@ class NerfactoField(Field):
             max_res=max_res,
             log2_hashmap_size=log2_hashmap_size,
             features_per_level=features_per_level,
-            num_layers=num_layers + 2, # 加一点层数
-            layer_width=hidden_dim * 2, # 和维度
+            num_layers=num_layers + 1, # 加一点层数
+            layer_width=hidden_dim, # 和维度
             out_dim=1 + self.geo_feat_dim,
             activation=nn.ReLU(),
             out_activation=None,
@@ -261,8 +261,8 @@ class NerfactoField(Field):
             positions = SceneBox.get_normalized_positions(ray_samples.frustums.get_positions(), self.aabb)
         # Make sure the tcnn gets inputs between 0 and 1.
 
-        # positions = self.low_pass_filter(positions) # 应用滤波器
-        positions = self.gaussian_filter(positions)
+        positions = self.low_pass_filter(positions) # 应用滤波器
+        # positions = self.gaussian_filter(positions)
 
         selector = ((positions > 0.0) & (positions < 1.0)).all(dim=-1)
         positions = positions * selector[..., None]
