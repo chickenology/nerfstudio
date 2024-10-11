@@ -62,6 +62,21 @@ class GaussianFilter(nn.Module):
 
     def forward(self, x):
         return nn.functional.conv2d(x, self.kernel, padding=self.padding)
+    
+class AttentionModule(nn.Module):
+    def __init__(self, dim):
+        super(AttentionModule, self).__init__()
+        self.query = nn.Linear(dim, dim)
+        self.key = nn.Linear(dim, dim)
+        self.value = nn.Linear(dim, dim)
+
+    def forward(self, x):
+        q = self.query(x)
+        k = self.key(x)
+        v = self.value(x)
+        attn_weights = torch.softmax(torch.matmul(q, k.transpose(-2, -1)) / (x.size(-1) ** 0.5), dim=-1)
+        attn_output = torch.matmul(attn_weights, v)
+        return attn_output
 
 class NerfactoField(Field):
     """Compound Field
@@ -163,8 +178,8 @@ class NerfactoField(Field):
             max_res=max_res,
             log2_hashmap_size=log2_hashmap_size,
             features_per_level=features_per_level,
-            num_layers=num_layers, # 加一点层数
-            layer_width=hidden_dim, # 和维度
+            num_layers=num_layers + 2, # 加一点层数
+            layer_width=hidden_dim * 2, # 和维度
             out_dim=1 + self.geo_feat_dim,
             activation=nn.ReLU(),
             out_activation=None,
@@ -246,8 +261,8 @@ class NerfactoField(Field):
             positions = SceneBox.get_normalized_positions(ray_samples.frustums.get_positions(), self.aabb)
         # Make sure the tcnn gets inputs between 0 and 1.
 
-        positions = self.low_pass_filter(positions) # 应用滤波器
-        # positions = self.gaussian_filter(positions)
+        # positions = self.low_pass_filter(positions) # 应用滤波器
+        positions = self.gaussian_filter(positions)
 
         selector = ((positions > 0.0) & (positions < 1.0)).all(dim=-1)
         positions = positions * selector[..., None]
@@ -264,9 +279,10 @@ class NerfactoField(Field):
 
         # 加一个 Skip Connection
         combined_input = torch.cat([positions_flat, h.view(-1, self.geo_feat_dim)], dim=-1)
-        output_with_skip = self.mlp_skip(combined_input)
+        # output_with_skip = self.mlp_skip(combined_input)
+        attn_output = self.attention_module(combined_input)
 
-        density_before_activation, base_mlp_out = torch.split(output_with_skip, [1, self.geo_feat_dim], dim=-1)
+        density_before_activation, base_mlp_out = torch.split(attn_output, [1, self.geo_feat_dim], dim=-1)
         self._density_before_activation = density_before_activation
 
         # Rectifying the density with an exponential is much more stable than a ReLU or
