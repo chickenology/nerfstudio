@@ -414,6 +414,11 @@ class NerfactoModel(Model):
         ssim = self.ssim(gt_rgb, predicted_rgb)
         lpips = self.lpips(gt_rgb, predicted_rgb)
 
+        # 打印 PSNR, SSIM 和 LPIPS 的值
+        print(f"PSNR: {psnr.item()}")
+        print(f"SSIM: {ssim.item()}")
+        print(f"LPIPS: {lpips.item()}")
+        
         # all of these metrics will be logged as scalars
         metrics_dict = {"psnr": float(psnr.item()), "ssim": float(ssim)}  # type: ignore
         metrics_dict["lpips"] = float(lpips)
