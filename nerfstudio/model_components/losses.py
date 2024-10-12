@@ -28,9 +28,9 @@ from nerfstudio.field_components.field_heads import FieldHeadNames
 from nerfstudio.utils.math import masked_reduction, normalized_depth_scale_and_shift
 
 L1Loss = nn.L1Loss
-MSELoss = nn.MSELoss
+HuberLoss = nn.HuberLoss
 
-LOSSES = {"L1": L1Loss, "MSE": MSELoss}
+LOSSES = {"L1": L1Loss, "Huber": HuberLoss}
 
 EPS = 1.0e-7
 
@@ -353,7 +353,7 @@ class MiDaSMSELoss(nn.Module):
 
         self.reduction_type: Literal["image", "batch"] = reduction_type
         # reduction here is different from the image/batch-based reduction. This is either "mean" or "sum"
-        self.mse_loss = MSELoss(reduction="none")
+        self.loss_fn = nn.HuberLoss(reduction="none")
 
     def forward(
         self,
@@ -370,7 +370,7 @@ class MiDaSMSELoss(nn.Module):
             mse loss based on reduction function
         """
         summed_mask = torch.sum(mask, (1, 2))
-        image_loss = torch.sum(self.mse_loss(prediction, target) * mask, (1, 2))
+        image_loss = torch.sum(self.loss_fn(prediction, target) * mask, (1, 2))
         # multiply by 2 magic number?
         image_loss = masked_reduction(image_loss, 2 * summed_mask, self.reduction_type)
 
