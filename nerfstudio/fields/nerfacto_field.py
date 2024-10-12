@@ -369,8 +369,8 @@ class NerfactoField(Field):
         )
 
         # 加的
-        attn_color_input = h + skip_input
-        final_input = self.attention_module(attn_color_input)
+        attn_color_input = self.attention_module(h)
+        final_input =  attn_color_input + skip_input
 
         rgb = self.mlp_head(final_input).view(*outputs_shape, -1).to(directions)
         outputs.update({FieldHeadNames.RGB: rgb})
