@@ -179,7 +179,8 @@ class NerfactoField(Field):
             log2_hashmap_size=log2_hashmap_size,
             features_per_level=features_per_level,
             num_layers=num_layers + 1, # 加一点层数
-            layer_width=hidden_dim, # 和维度
+            layer_width=hidden_dim * 2, # 和维度
+            # layer_width=hidden_dim,
             out_dim=1 + self.geo_feat_dim,
             activation=nn.ReLU(),
             out_activation=None,
@@ -279,10 +280,9 @@ class NerfactoField(Field):
 
         # 加一个 Skip Connection
         combined_input = torch.cat([positions_flat, h.view(-1, self.geo_feat_dim)], dim=-1)
-        # output_with_skip = self.mlp_skip(combined_input)
-        attn_output = self.attention_module(combined_input)
+        output_with_skip = self.mlp_skip(combined_input)
 
-        density_before_activation, base_mlp_out = torch.split(attn_output, [1, self.geo_feat_dim], dim=-1)
+        density_before_activation, base_mlp_out = torch.split(output_with_skip, [1, self.geo_feat_dim], dim=-1)
         self._density_before_activation = density_before_activation
 
         # Rectifying the density with an exponential is much more stable than a ReLU or
@@ -305,6 +305,8 @@ class NerfactoField(Field):
         d = self.direction_encoding(directions_flat)
 
         outputs_shape = ray_samples.frustums.directions.shape[:-1]
+
+        skip_input = torch.cat([d, density_embedding.view(-1, self.geo_feat_dim)], dim=-1)
 
         # appearance
         embedded_appearance = None
@@ -365,7 +367,12 @@ class NerfactoField(Field):
             ),
             dim=-1,
         )
-        rgb = self.mlp_head(h).view(*outputs_shape, -1).to(directions)
+
+        # 加的
+        attn_color_input = h + skip_input
+        final_input = self.attention_module(attn_color_input)
+
+        rgb = self.mlp_head(final_input).view(*outputs_shape, -1).to(directions)
         outputs.update({FieldHeadNames.RGB: rgb})
 
         return outputs
