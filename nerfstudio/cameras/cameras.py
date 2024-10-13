@@ -117,7 +117,7 @@ class Cameras(TensorDataclass):
             int,
             List[CameraType],
             CameraType,
-        ] = CameraType.PERSPECTIVE,
+        ] = CameraType.FISHEYE,
         times: Optional[Float[Tensor, "num_cameras"]] = None,
         metadata: Optional[Dict] = None,
     ) -> None:
